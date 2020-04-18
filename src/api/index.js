@@ -1,6 +1,7 @@
 /**
  * Created by Administrator on 2020/3/31.
  */
+import ajax from './ajax'
 /**
  * 账号密码登录
  */

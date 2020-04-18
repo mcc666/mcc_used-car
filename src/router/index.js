@@ -10,6 +10,7 @@ import BuyCar from '../pages/BuyCar/BuyCar.vue'
 import Order from '../pages/Order/Order.vue'
 import Profile from '../pages/Profile/Profile.vue'
 import Login from '../pages/Login/Login.vue'
+import UserInfo from '../pages/UserInfo/UserInfo.vue'
 
 
 //声明使用插件
@@ -46,8 +47,12 @@ export default new VueRouter({
       }
     },
     {
+      path:'/UserInfo',
+      component:UserInfo,
+    },
+    {
       path:'/Login',
-      component:Login
+      component:Login,
     },
     {
       path:'/',

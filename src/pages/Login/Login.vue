@@ -1,5 +1,5 @@
 <template>
-      <div class="loginContainer">
+      <section class="loginContainer">
         <div class="loginInner">
           <div class="login_header">
             <h2 class="login_logo">长理二手车</h2>
@@ -9,14 +9,16 @@
             </div>
           </div>
           <div class="login_content">
-            <form>
+            <form @submit.prevent="login">
               <div :class = "{on:loginWay}">
                 <section class="login_message">
-                  <input type="tel" maxlength="11" placeholder="手机号">
-                  <button disabled="disabled" class="get_verification" >获取验证码</button>
+                  <input type="tel" maxlength="11" placeholder="手机号" v-model="phone">
+                  <button :disabled="!rightPhone" class="get_verification" :class="{right_phone:rightPhone}"
+                          @click.prevent="getCode">
+                    {{computeTime>0 ? `已发送${computeTime}s` : '获取验证码'}}</button>
                 </section>
                 <section class="login_verification">
-                  <input type="tel" maxlength="8" placeholder="验证码">
+                  <input type="tel" maxlength="8" placeholder="验证码" v-model="code">
                 </section>
                 <section class="login_hint">
                   温馨提示：未注册长理二手车帐号的手机号，登录时将自动注册，且代表已同意
@@ -26,18 +28,20 @@
               <div :class = "{on:!loginWay}">
                 <section>
                   <section class="login_message">
-                    <input type="tel" maxlength="11" placeholder="手机/邮箱/用户名">
+                    <input type="text" maxlength="11" placeholder="手机/邮箱/用户名" v-model="name">
                   </section>
                   <section class="login_verification">
-                    <input type="tel" maxlength="8" placeholder="密码">
-                    <div class="switch_button off">
-                      <div class="switch_circle"></div>
-                      <span class="switch_text">...</span>
+                    <input type="password" maxlength="8" placeholder="密码" v-if="!showPwd" v-model="pwd">
+                    <input type="text" maxlength="8" placeholder="密码" v-else v-model="pwd">
+                    <div class="switch_button" :class="showPwd ? 'on':'off'" @click="showPwd = !showPwd">
+                      <div class="switch_circle":class="{right:showPwd}"></div>
+                      <span class="switch_text">{{showPwd?'adb':'...'}}</span>
                     </div>
                   </section>
                   <section class="login_message">
-                    <input type="text" maxlength="11" placeholder="验证码">
-                    <img class="get_verification" src="./images/captcha.svg" alt="captcha">
+                    <input type="text" maxlength="11" placeholder="验证码" v-model="captcha">
+                    <img class="get_verification" src="http://localhost:4000/captcha" alt="captcha"
+                         @click="getCaptcha" ref="captcha">
                   </section>
                 </section>
               </div>
@@ -49,16 +53,116 @@
             <i class="iconfont icon-arrow-lift"></i>
           </span>
         </div>
-      </div>
+        <AlertTip :alertText="alertText" v-show="alertShow" @closeTip = "closeTip"></AlertTip>
+      </section>
 </template>
 
 <script>
+  import AlertTip from "../../components/AlertTip/AlertTip.vue"
+  import {reqPwdLogin,reqSendCode,reqSmsLogin} from "../../api"
     export default {
       data(){
         return {
-          loginWay:true
-        } //true代表短信登录，false代表密码登录
-      }
+          loginWay:true,//true代表短信登录，false代表密码登录
+          computeTime:0,//计时初始化
+          showPwd:false,//是否显示密码
+          phone:"",//手机号
+          name:"",//名字
+          code:"",//短信验证码
+          captcha:"",//图形验证码
+          pwd:"",//密码
+          alertText:"",//提示文本
+          alertShow:false,//是否显示警告框
+        }
+      },
+      computed:{
+        rightPhone(){
+          return /^1\d{10}$/.test(this.phone)
+        }
+      },
+      methods:{
+       async getCode(){
+          if(!this.computeTime){
+            this.computeTime = 30
+            this.intervalId = setInterval(()=>{
+              this.computeTime--
+              if(this.computeTime<=0){
+                clearInterval(this.intervalId)
+              }
+            },1000)
+            //发ajax请求获得验证码
+            const result = await reqSendCode(this.phone)
+            if(result.code === 1){
+              this.showAlert(result.msg)
+              if(this.computeTime){
+                this.computeTime = 0
+                clearInterval(this.intervalId)
+                this.intervalId = null
+              }
+            }
+          }
+        },
+        showAlert(alertText){
+          this.alertShow = true
+          this.alertText = alertText
+        },
+        async login(){
+          let result
+          if(this.loginWay){
+            const{rigthPhone,phone,code} = this
+            if(!this.rightPhone){
+              this.showAlert('手机号不正确')
+              return
+            }
+            else if(!/^\d{6}$/.test(code)){
+              this.showAlert('验证码不正确')
+              return
+            }
+            result = await reqSmsLogin(phone,code)
+          }
+          else{
+            const{name,pwd,captcha} = this
+            if(!name){
+              this.showAlert('用户名必须指定')
+              return
+            }
+            else if(!pwd){
+              this.showAlert('密码必须指定')
+              return
+            }
+            else if(!captcha){
+              this.showAlert('验证码必须指定')
+              return
+            }
+            result = await reqPwdLogin(name,pwd,captcha)
+          }
+          if(this.computeTime) {
+            this.computeTime = 0
+            clearInterval(this.intervalId)
+            this.intervalId = null
+          }
+          if(result.code===0){
+            const user = result.data
+            this.$store.dispatch('recordUser', user)
+            this.$router.replace('/profile')
+          }
+          else {
+            this.getCaptcha()
+            const msg = result.msg
+            this.showAlert(msg)
+          }
+        },
+        closeTip(){
+          this.alertShow = false
+          this.alertText = ''
+        },
+        getCaptcha(){
+          this.$refs.captcha.src = 'http://localhost:4000/captcha?time' + Date.now()
+        }
+      },
+      components:{
+        AlertTip
+      },
     }
 </script>
 
